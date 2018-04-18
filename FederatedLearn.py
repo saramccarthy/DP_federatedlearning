@@ -7,36 +7,44 @@ Created on Nov 5, 2017
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-from LoadData import load_test_data, load_train_data, partitionCifarData,\
-    img_per_client
+from LoadData import load_test_data, load_train_data, partitionCifarData, img_per_client
 import os, shutil
-from cifar10NN.cifar10 import buildModel
 import cifar10NN.cifar10_client as cf
+import cifar10NN.cifar10_OWA_train as owa
+import random as rand
     
 re_partition_data=False
-data_dir = '/Users/Sara/Dropbox/Class/NN/Project/data/cifar10-batches-bin/cifar-10-batches-bin'#'./data/cifar10-batches-bin/cifar10-batches-bin'
+data_dir = '/Users/Sara/Dropbox/Class/NN/Project/data/cifar10-batches-bin/'#'./data/cifar10-batches-bin/cifar10-batches-bin'
 client_dir = './data/clients/cifar/'
 filenames = [os.path.join(data_dir, 'data_batch_%d.bin' % i)
-               for i in xrange(1, 6)]
+               for i in range(1, 6)]
 
 if re_partition_data:
     partitionCifarData(filenames, client_dir, 100)
 
 N = img_per_client(filenames, client_dir, 100)
-m = 2
+m = 10
 K = (1/N)*(100/m)
 client_list = []
 for i in range(m):
     c = cf.cifar10_client(i)
     client_list.append(c)
 
-for j in range(10):    
+for j in range(1):    
     weights = []
     central_weights = []
     for client in client_list:
+        print("training client")
         client.train() 
-        vars = cf.weights
+        vars = cf.weights #[ w*rand.randint(1,100) for w in cf.weights]
         weights.extend([vars])
+        #print(vars)
+    print("Optimizing Weights")
+    #owa.train(weights, m)
+    #optweights = owa.weights
+    #print(optweights[0])
+    
+    #K = getClientWeights(weights)
      
     n_tensors = len(weights[0])
     for i in range(n_tensors):
@@ -64,7 +72,10 @@ for j in range(10):
             i+=1  
         
         for client in client_list:
+            new_saver = tf.train.import_meta_graph("/Users/Sara/Dropbox/Class/NN/Project/models/cifar/model.ckpt-11.meta")
+            new_saver.restore(sess, tf.train.latest_checkpoint("/Users/Sara/Dropbox/Class/NN/Project/models/cifar/"))
             path = client.model_dir+"/model.ckpt"
+            print(path)
             folder = client.model_dir
             for the_file in os.listdir(folder):
                 file_path = os.path.join(folder, the_file)
@@ -76,7 +87,7 @@ for j in range(10):
                     print(e)
             save_path = new_saver.save(sess, path)
 
-        #save_path = new_saver.save(sess, "/Users/Sara/Dropbox/Class/NN/Project/models/cifar/client0/model.ckpt")
+        save_path = new_saver.save(sess, "/Users/Sara/Dropbox/Class/NN/Project/models/central/model.ckpt")
         #save_path = new_saver.save(sess, "/Users/Sara/Dropbox/Class/NN/Project/models/cifar/client1/model.ckpt")
 
 '''    

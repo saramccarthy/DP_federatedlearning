@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import os.path as osp
 import os
 import subprocess
+from tensorflow.examples.tutorials.mnist import input_data
 
 class DataSet(object):
     def __init__(self):
@@ -103,7 +104,6 @@ def load_train_data():
 def load_test_data():
 
     data, labels = unpickle("../data/cifar-10-batches-py/test_batch")
-    print data.shape
     data =  np.transpose(np.reshape(data,(10000,3,32,32)),[0,2,3,1])
     labels = np.asarray(labels)
     return data, labels
@@ -125,7 +125,6 @@ def img_per_client(filename_queue, client_dir, clients, iid=True):
     images = []
     bytes = 3073
     for file in filename_queue:
-        print os.getcwd()
         f = open(file, 'rb')
         while True:
             piece = f.read(bytes)  
@@ -142,7 +141,6 @@ def partitionCifarData(filename_queue, client_dir, clients, iid=True):
     images = []
     bytes = 3073
     for file in filename_queue:
-        print os.getcwd()
         f = open(file, 'rb')
         while True:
             piece = f.read(bytes)  
@@ -153,6 +151,7 @@ def partitionCifarData(filename_queue, client_dir, clients, iid=True):
     np.random.shuffle(images) 
     num_images=len(images)
     images_per_client=num_images//clients
+    owa_records = []
     if iid:
         for client in range(clients):
             np.random.shuffle(images)
@@ -160,5 +159,46 @@ def partitionCifarData(filename_queue, client_dir, clients, iid=True):
             contents = b"".join([record for record in client_images])
             filename = os.path.join(client_dir,'cifar_client_%d.bin' % client)
             open(filename, "wb").write(contents) 
+        np.random.shuffle(images)
+        owa_images = images[:images_per_client]
+        contents = b"".join([record for record in owa_images])
+        filename = os.path.join(client_dir,'cifar_owa.bin')
+        open(filename, "wb").write(contents) 
+    else:
+        #np.random.shuffle(images)
+        i=0
+        for client in range(clients):
+            client_images = images[i*images_per_client:(i+1)*images_per_client]
+            owa_records.extend(client_images[:images_per_client//clients])
+            contents = b"".join([record for record in client_images])
+            filename = os.path.join(client_dir,'cifar_client_%d.bin' % client)
+            open(filename, "wb").write(contents) 
+        contents = b"".join([record for record in owa_records])
+        filename = os.path.join(client_dir,'cifar_owa.bin')
+        open(filename, "wb").write(contents)
+    return images_per_client 
 
-            
+def load_dataMNIST(data_dir):
+    num_train = 60000
+    num_test = 10000
+
+    def load_file(filename, num, shape):
+        fd = open(osp.join(data_dir, filename))
+        loaded = np.fromfile(file=fd, dtype=np.uint8)
+        return loaded[num:].reshape(shape).astype(np.float)
+
+    train_image = load_file('train-images-idx3-ubyte', 16, (num_train, 28, 28, 1))
+    train_label = load_file('train-labels-idx1-ubyte', 8, num_train)
+    test_image = load_file('t10k-images-idx3-ubyte', 16, (num_test, 28, 28, 1))
+    test_label = load_file('t10k-labels-idx1-ubyte', 8, num_test)
+    return train_image, train_label, test_image, test_label
+
+def partitionMNIST(clients, iid=False):
+    mnist = input_data.read_data_sets("MNIST_data/", one_hot=False)
+    train_I, train_L = np.array_split(mnist.train.images, clients), np.array_split(mnist.train.labels, clients)
+    val_I, val_L = np.array_split(mnist.train.images, clients), np.array_split(mnist.train.labels, clients)
+    
+    return train_I, train_L,val_I, val_L
+
+
+partitionCifarData(["./data/cifar10-batches-bin/test_batch.bin"], './data/clients/cifar/', 10)            
